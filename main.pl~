@@ -1,0 +1,59 @@
+:- use_module(library(http/thread_httpd)).
+:- use_module(library(http/http_dispatch)).
+:- use_module(library(http/http_parameters)).
+:- use_module(library(http/http_server_files)).
+:- use_module(library(http/http_client)).
+:- use_module(library(http/http_header)).
+:- use_module(library(http/html_write)).
+
+% Defina a rota para a página principal
+:- http_handler(root(.), todo_list, []).
+
+% Estado da lista de tarefas
+:- dynamic(task/1).
+
+% Página principal da lista de tarefas
+todo_list(_Request) :-
+    reply_html_page(
+        title('Lista de Tarefas'),
+        [ h1('Lista de Tarefas'),
+          form([ action('/add'), method('POST') ],
+            [ input([ type(text), name(task), placeholder('Nova tarefa') ]),
+              input([ type(submit), value('Adicionar') ])
+            ]),
+          ul(\generate_task_list)
+        ]).
+
+% Página para adicionar tarefa
+:- http_handler('/add', add_task, [method(post)]).
+
+add_task(Request) :-
+    http_read_data(Request, Data, []),
+    http_parameters(Data, [task(Task, [string])]),
+    assertz(task(Task)),
+    http_redirect(see_other, '/', _).
+
+% Gera a lista de tarefas
+generate_task_list -->
+    { findall(Task, task(Task), Tasks) },
+    generate_task_list(Tasks).
+
+generate_task_list([]) --> [].
+generate_task_list([Task|Tasks]) -->
+    html(li([Task, ' ', a(href('/remove?task='), '[Remover]'])),
+    generate_task_list(Tasks)).
+
+% Página para remover tarefa
+:- http_handler('/remove', remove_task, []).
+
+remove_task(Request) :-
+    http_parameters(Request, [task(Task, [string])]),
+    retract(task(Task)),
+    http_redirect(see_other, '/', _).
+
+% Inicie o servidor na porta 8080
+server(Port) :-
+    http_server(http_dispatch, [port(Port)]).
+
+% Inicie o servidor na porta 8080 quando o arquivo for carregado
+:- initialization(server(8080)).
